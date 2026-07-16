@@ -1,12 +1,336 @@
 #include "Core/GameDatabase.h"
 
 #include <iostream>
+#include <fstream>
+#include <algorithm>
+
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
+
+
+std::string ExtractItemID(const std::string& input)
+{
+    auto pos = input.rfind('.');
+
+    if (pos == std::string::npos)
+        return "";
+
+    std::string id = input.substr(pos + 1);
+
+    if (!id.empty() && id.back() == '\'')
+        id.pop_back();
+
+    return id;
+}
+
+
+std::vector<std::pair<std::string, int>> ParseItemList(const std::string& input)
+{
+    std::vector<std::pair<std::string, int>> result;
+
+    size_t pos = 0;
+
+    while (true)
+    {
+        auto itemStart = input.find("ItemClass=\"", pos);
+
+        if (itemStart == std::string::npos)
+            break;
+
+        itemStart += 11;
+
+        auto itemEnd = input.find("\"", itemStart);
+
+        if (itemEnd == std::string::npos)
+            break;
+
+        std::string path = input.substr(
+            itemStart,
+            itemEnd - itemStart
+        );
+
+
+        auto amountStart = input.find("Amount=", itemEnd);
+
+        if (amountStart == std::string::npos)
+            break;
+
+        amountStart += 7;
+
+        auto amountEnd = input.find(")", amountStart);
+
+        int amount = std::stoi(
+            input.substr(
+                amountStart,
+                amountEnd - amountStart
+            )
+        );
+
+
+        result.push_back(
+            {
+                ExtractItemID(path),
+                amount
+            }
+        );
+
+
+        pos = amountEnd;
+    }
+
+    return result;
+}
+
 
 bool GameDatabase::Load(const std::string& filename)
 {
-    std::cout << "Loading database: "
-        << filename
-        << std::endl;
+    std::ifstream file(filename);
+
+    if (!file.is_open())
+    {
+        std::cerr << "Failed to open database file\n";
+        return false;
+    }
+
+
+    try
+    {
+        json data;
+        file >> data;
+
+        std::cout << "Database loaded successfully\n";
+        std::cout << "Top level entries: "
+            << data.size()
+            << "\n";
+
+
+        if (!LoadItems(data))
+            return false;
+
+
+        if (!LoadRecipes(data))
+            return false;
+
+
+        BuildRecipeLookup();
+
+
+        return true;
+    }
+    catch (const json::exception& e)
+    {
+        std::cerr << e.what() << "\n";
+        return false;
+    }
+}
+
+
+
+bool GameDatabase::LoadItems(const json& data)
+{
+    items.reserve(200);
+
+    for (const auto& entry : data)
+    {
+        if (!entry.contains("NativeClass"))
+            continue;
+
+
+        std::string nativeClass = entry["NativeClass"];
+
+
+        if (nativeClass.find("FGItemDescriptor") == std::string::npos)
+            continue;
+
+
+        for (const auto& itemJson : entry["Classes"])
+        {
+            Item item;
+
+            item.id = itemJson.value("ClassName", "");
+            item.name = itemJson.value("mDisplayName", "");
+
+
+            items.push_back(item);
+
+            itemLookup[item.id] = &items.back();
+        }
+    }
+
+
+    std::cout
+        << "Loaded Items: "
+        << items.size()
+        << "\n";
+
+
+    for (size_t i = 0; i < std::min<size_t>(5, items.size()); i++)
+    {
+        std::cout
+            << "  "
+            << items[i].id
+            << " -> "
+            << items[i].name
+            << "\n";
+    }
+
+
+    auto test = itemLookup.find("Desc_IronPlate_C");
+
+    if (test != itemLookup.end())
+    {
+        std::cout
+            << "Lookup test: "
+            << test->second->id
+            << " -> "
+            << test->second->name
+            << "\n";
+    }
+
 
     return true;
+}
+
+
+
+bool GameDatabase::LoadRecipes(const json& data)
+{
+    for (const auto& entry : data)
+    {
+        if (!entry.contains("NativeClass"))
+            continue;
+
+
+        std::string nativeClass = entry["NativeClass"];
+
+
+        if (nativeClass.find("FGRecipe") == std::string::npos)
+            continue;
+
+
+        for (const auto& recipeJson : entry["Classes"])
+        {
+            Recipe recipe;
+
+            recipe.id = recipeJson.value("ClassName", "");
+            recipe.name = recipeJson.value("mDisplayName", "");
+
+
+            if (recipeJson.contains("mManufactoringDuration"))
+            {
+                recipe.duration =
+                    std::stof(
+                        recipeJson["mManufactoringDuration"].get<std::string>()
+                    );
+            }
+            else
+            {
+                recipe.duration = 0;
+            }
+
+
+            if (recipeJson.contains("mIngredients"))
+            {
+                auto ingredients =
+                    ParseItemList(
+                        recipeJson["mIngredients"].get<std::string>()
+                    );
+
+
+                for (auto& ingredient : ingredients)
+                {
+                    auto found = itemLookup.find(ingredient.first);
+
+                    if (found != itemLookup.end())
+                    {
+                        Ingredient item;
+
+                        item.item = found->second;
+                        item.amount = ingredient.second;
+
+                        recipe.ingredients.push_back(item);
+                    }
+                }
+            }
+
+
+            if (recipeJson.contains("mProduct"))
+            {
+                auto products =
+                    ParseItemList(
+                        recipeJson["mProduct"].get<std::string>()
+                    );
+
+
+                for (auto& product : products)
+                {
+                    auto found = itemLookup.find(product.first);
+
+                    if (found != itemLookup.end())
+                    {
+                        Product item;
+
+                        item.item = found->second;
+                        item.amount = product.second;
+
+                        recipe.products.push_back(item);
+                    }
+                }
+            }
+
+
+            recipes.push_back(recipe);
+            recipes.reserve(1000);
+        }
+    }
+
+
+    std::cout
+        << "Loaded Recipes: "
+        << recipes.size()
+        << "\n";
+
+
+    return true;
+}
+
+
+
+void GameDatabase::BuildRecipeLookup()
+{
+    for (auto& recipe : recipes)
+    {
+        for (auto& product : recipe.products)
+        {
+            recipeByProduct[product.item].push_back(&recipe);
+        }
+    }
+
+
+    auto item = itemLookup.find("Desc_IronPlate_C");
+
+    if (item != itemLookup.end())
+    {
+        auto recipesFound =
+            recipeByProduct.find(item->second);
+
+
+        if (recipesFound != recipeByProduct.end())
+        {
+            std::cout
+                << "\nRecipes producing "
+                << item->second->name
+                << ":\n";
+
+
+            for (auto& recipe : recipesFound->second)
+            {
+                std::cout
+                    << "  "
+                    << recipe->name
+                    << "\n";
+            }
+        }
+    }
 }

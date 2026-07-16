@@ -5,14 +5,19 @@
 
 int main()
 {
-    std::cout << "Satisfactory Planner Starting..."
-        << std::endl;
+    std::cout << "Satisfactory Planner Starting...\n";
 
 
     GameDatabase database;
 
-    database.Load("data/game.json");
+    if (!database.Load("data/en-US.json"))
+    {
+        std::cout << "Database load failed\n";
+        return 1;
+    }
 
+
+    std::cout << "Done\n";
 
     return 0;
 }

@@ -12,13 +12,27 @@ add_executable(
 
     "src/main.cpp"
     "src/Core/GameDatabase.cpp"
-    "include/Core/GameDatabase.h"
+ "src/Core/ProductionPlanner.cpp")
+
+add_custom_command(
+    TARGET SatisfactoryPlanner POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/data"
+    "$<TARGET_FILE_DIR:SatisfactoryPlanner>/data"
 )
 
 target_include_directories(
     SatisfactoryPlanner
     PRIVATE
     "include"
+)
+
+find_package(nlohmann_json CONFIG REQUIRED)
+
+target_link_libraries(
+    SatisfactoryPlanner
+    PRIVATE
+    nlohmann_json::nlohmann_json
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
