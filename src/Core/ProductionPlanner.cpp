@@ -13,25 +13,25 @@ ProductionPlanner::ProductionPlanner(GameDatabase& database)
 
 void ProductionPlanner::Plan(Item* target, float amount)
 {
-    requiredItems.clear();
-
-
-    std::cout
-        << "\nProduction Plan:\n";
-
-
-    Resolve(
+    auto tree = Resolve(
         target,
-        amount,
-        0
+        amount
     );
 
 
-    std::cout
-        << "\nRaw Materials:\n";
+    std::cout << "\nProduction Plan:\n";
+
+    PrintNode(tree);
 
 
-    for (auto& item : requiredItems)
+    baseResources.clear();
+
+    CollectBaseResources(tree);
+
+
+    std::cout << "\nBase Resources:\n";
+
+    for (auto& item : baseResources)
     {
         std::cout
             << "  "
@@ -60,26 +60,30 @@ void ProductionPlanner::SetRecipe(Item* item, Recipe* recipe)
 }
 
 
-void ProductionPlanner::Resolve(
+ProductionNode ProductionPlanner::Resolve(
     Item* item,
-    float amount,
-    int depth
+    float rate
 )
 {
+    ProductionNode node;
+
+    node.item = item;
+    node.rate = rate;
+
+
     auto recipes =
         database.GetRecipeLookup().find(item);
 
 
-    // Raw resource
-    if (recipes == database.GetRecipeLookup().end() ||
-        recipes->second.front()->ingredients.empty())
+    if (recipes == database.GetRecipeLookup().end())
     {
-        requiredItems[item] += amount;
-        return;
+        baseResources[item] += rate;
+        return node;
     }
 
 
     Recipe* recipe = nullptr;
+
 
     auto selected = selectedRecipes.find(item);
 
@@ -89,28 +93,93 @@ void ProductionPlanner::Resolve(
     }
     else
     {
-        recipe = recipes->second.front();
+        recipe = database.GetDefaultRecipe(item);
     }
 
 
+    if (!recipe)
+    {
+        baseResources[item] += rate;
+        return node;
+    }
+
+
+    node.recipe = recipe;
+    node.machineRate =
+        recipe->GetOutputPerMinute();
+
+    node.machinesRequired =
+        rate / node.machineRate;
+
     float multiplier =
-        amount / recipe->products[0].amount;
-
-
-    std::cout
-        << std::string(depth * 2, ' ')
-        << item->name
-        << " x"
-        << amount
-        << "\n";
+        rate /
+        node.machineRate;
 
 
     for (auto& ingredient : recipe->ingredients)
     {
-        Resolve(
-            ingredient.item,
-            ingredient.amount * multiplier,
-            depth + 1
+        node.children.push_back(
+            Resolve(
+                ingredient.item,
+                ingredient.amount *
+                recipe->GetCyclesPerMinute() *
+                node.machinesRequired
+            )
         );
+    }
+
+
+    return node;
+}
+
+void ProductionPlanner::PrintNode(
+    const ProductionNode& node,
+    int depth
+)
+{
+    std::cout
+        << std::string(depth * 2, ' ')
+        << node.item->name
+        << " x"
+        << node.rate;
+
+
+    if (node.recipe)
+    {
+        std::cout
+            << " ["
+            << node.recipe->machine
+            << "]";
+
+        std::cout
+            << " "
+            << node.recipe->GetOutputPerMinute()
+            << "/min";
+    }
+
+
+    std::cout << "\n";
+
+
+    for (const auto& child : node.children)
+    {
+        PrintNode(child, depth + 1);
+    }
+}
+
+void ProductionPlanner::CollectBaseResources(
+    const ProductionNode& node
+)
+{
+    if (node.children.empty())
+    {
+        baseResources[node.item] += node.rate;
+        return;
+    }
+
+
+    for (const auto& child : node.children)
+    {
+        CollectBaseResources(child);
     }
 }

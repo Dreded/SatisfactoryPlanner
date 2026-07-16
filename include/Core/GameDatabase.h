@@ -20,6 +20,7 @@ public:
     Item* FindItem(const std::string& id);
 
     Recipe* FindRecipeByName(const std::string& name);
+    Recipe* GetDefaultRecipe(Item* item);
 
     const std::vector<Recipe>& GetRecipes() const
     {

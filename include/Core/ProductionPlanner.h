@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Core/GameDatabase.h"
-
 #include <unordered_map>
 #include <string>
+
+#include "Core/GameDatabase.h"
+#include "Models/ProductionNode.h"
 
 
 class ProductionPlanner
@@ -17,16 +18,19 @@ public:
 
 private:
 
-    GameDatabase& database;
-
-
-    void Resolve(
+    ProductionNode Resolve(
         Item* item,
-        float amount,
-        int depth
+        float amount
     );
 
+    void PrintNode(const ProductionNode& node, int depth = 0);
 
-    std::unordered_map<Item*, float> requiredItems;
+    void CollectBaseResources(
+        const ProductionNode& node
+    );
+
+    GameDatabase& database;
+
+    std::unordered_map<Item*, float> baseResources;
     std::unordered_map<Item*, Recipe*> selectedRecipes;
 };

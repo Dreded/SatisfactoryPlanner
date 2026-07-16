@@ -24,6 +24,32 @@ std::string ExtractItemID(const std::string& input)
     return id;
 }
 
+std::string ExtractMachineName(const std::string& input)
+{
+    if (input.find("AssemblerMk1") != std::string::npos)
+        return "Assembler";
+
+    if (input.find("Constructor") != std::string::npos)
+        return "Constructor";
+
+    if (input.find("Smelter") != std::string::npos)
+        return "Smelter";
+
+    if (input.find("Foundry") != std::string::npos)
+        return "Foundry";
+
+    if (input.find("Manufacturer") != std::string::npos)
+        return "Manufacturer";
+
+    if (input.find("Blender") != std::string::npos)
+        return "Blender";
+
+    if (input.find("Refinery") != std::string::npos)
+        return "Refinery";
+
+    return "Unknown";
+}
+
 
 std::vector<std::pair<std::string, int>> ParseItemList(const std::string& input)
 {
@@ -167,31 +193,6 @@ bool GameDatabase::LoadItems(const json& data)
         << items.size()
         << "\n";
 
-
-    for (size_t i = 0; i < std::min<size_t>(5, items.size()); i++)
-    {
-        std::cout
-            << "  "
-            << items[i].id
-            << " -> "
-            << items[i].name
-            << "\n";
-    }
-
-
-    auto test = itemLookup.find("Desc_IronPlate_C");
-
-    if (test != itemLookup.end())
-    {
-        std::cout
-            << "Lookup test: "
-            << test->second->id
-            << " -> "
-            << test->second->name
-            << "\n";
-    }
-
-
     return true;
 }
 
@@ -199,6 +200,8 @@ bool GameDatabase::LoadItems(const json& data)
 
 bool GameDatabase::LoadRecipes(const json& data)
 {
+    recipes.reserve(1000);
+
     for (const auto& entry : data)
     {
         if (!entry.contains("NativeClass"))
@@ -218,6 +221,10 @@ bool GameDatabase::LoadRecipes(const json& data)
 
             recipe.id = recipeJson.value("ClassName", "");
             recipe.name = recipeJson.value("mDisplayName", "");
+            recipe.machine =
+                ExtractMachineName(
+                    recipeJson.value("mProducedIn", "")
+                );
 
 
             if (recipeJson.contains("mManufactoringDuration"))
@@ -282,32 +289,7 @@ bool GameDatabase::LoadRecipes(const json& data)
                 }
             }
 
-
             recipes.push_back(recipe);
-            recipes.reserve(1000);
-            if (recipe.name == "Reinforced Iron Plate")
-            {
-                std::cout << "\nLoaded recipe:\n";
-
-                for (auto& i : recipe.ingredients)
-                {
-                    std::cout
-                        << i.item->name
-                        << " x"
-                        << i.amount
-                        << '\n';
-                }
-
-                for (auto& p : recipe.products)
-                {
-                    std::cout
-                        << "Produces "
-                        << p.item->name
-                        << " x"
-                        << p.amount
-                        << '\n';
-                }
-            }
         }
 
     }
@@ -334,32 +316,6 @@ void GameDatabase::BuildRecipeLookup()
         }
     }
 
-
-    auto item = itemLookup.find("Desc_IronPlate_C");
-
-    if (item != itemLookup.end())
-    {
-        auto recipesFound =
-            recipeByProduct.find(item->second);
-
-
-        if (recipesFound != recipeByProduct.end())
-        {
-            std::cout
-                << "\nRecipes producing "
-                << item->second->name
-                << ":\n";
-
-
-            for (auto& recipe : recipesFound->second)
-            {
-                std::cout
-                    << "  "
-                    << recipe->name
-                    << "\n";
-            }
-        }
-    }
 }
 
 Item* GameDatabase::FindItemByName(const std::string& name)
@@ -395,4 +351,25 @@ Recipe* GameDatabase::FindRecipeByName(const std::string& name)
     }
 
     return nullptr;
+}
+
+Recipe* GameDatabase::GetDefaultRecipe(Item* item)
+{
+    auto found = recipeByProduct.find(item);
+
+    if (found == recipeByProduct.end())
+        return nullptr;
+
+
+    for (auto* recipe : found->second)
+    {
+        if (recipe->name.rfind("Alternate:", 0) != 0)
+        {
+            return recipe;
+        }
+    }
+
+
+    // Only alternates exist, return first option
+    return found->second.front();
 }

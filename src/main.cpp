@@ -20,7 +20,7 @@ int main()
 
     ProductionPlanner planner(database);
 
-    auto* target = database.FindItemByName("Turbo Motor");
+    auto* target = database.FindItemByName("Reinforced Iron Plate");
 
     if (!target)
     {
@@ -28,29 +28,8 @@ int main()
         return 1;
     }
 
-    auto* ironPlate = database.FindItemByName("Iron Plate");
 
-    if (!ironPlate)
-    {
-        std::cerr << "Item not found: Iron Plate\n";
-        return 1;
-    }
-
-    auto* steelCastPlate =
-        database.FindRecipeByName("Alternate: Steel Cast Plate");
-
-    if (!steelCastPlate)
-    {
-        std::cerr << "Recipe not found: Alternate: Steel Cast Plate\n";
-        return 1;
-    }
-
-    planner.SetRecipe(
-        database.FindItemByName("Iron Plate"),
-        database.FindRecipeByName("Alternate: Steel Cast Plate")
-    );
-
-    planner.Plan(target, 1);
+    planner.Plan(target, 5);
 
     std::cout << "Done\n";
 
