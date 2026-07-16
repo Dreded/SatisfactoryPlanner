@@ -154,7 +154,10 @@ bool GameDatabase::LoadItems(const json& data)
 
             items.push_back(item);
 
-            itemLookup[item.id] = &items.back();
+            Item* ptr = &items.back();
+
+            itemLookup[ptr->id] = ptr;
+            itemNameLookup[ptr->name] = ptr;
         }
     }
 
@@ -282,7 +285,31 @@ bool GameDatabase::LoadRecipes(const json& data)
 
             recipes.push_back(recipe);
             recipes.reserve(1000);
+            if (recipe.name == "Reinforced Iron Plate")
+            {
+                std::cout << "\nLoaded recipe:\n";
+
+                for (auto& i : recipe.ingredients)
+                {
+                    std::cout
+                        << i.item->name
+                        << " x"
+                        << i.amount
+                        << '\n';
+                }
+
+                for (auto& p : recipe.products)
+                {
+                    std::cout
+                        << "Produces "
+                        << p.item->name
+                        << " x"
+                        << p.amount
+                        << '\n';
+                }
+            }
         }
+
     }
 
 
@@ -333,4 +360,28 @@ void GameDatabase::BuildRecipeLookup()
             }
         }
     }
+}
+
+Item* GameDatabase::FindItemByName(const std::string& name)
+{
+    auto it = itemNameLookup.find(name);
+
+    if (it == itemNameLookup.end())
+    {
+        std::cerr << "Item not found: " << name << '\n';
+        return nullptr;
+    }
+    return it->second;
+}
+
+Item* GameDatabase::FindItem(const std::string& id)
+{
+    auto it = itemLookup.find(id);
+
+    if (it == itemLookup.end())
+    {
+        std::cerr << "Item ID not found: " << id << '\n';
+        return nullptr;
+    }
+    return it->second;
 }

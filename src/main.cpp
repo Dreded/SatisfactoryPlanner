@@ -1,6 +1,7 @@
 ﻿#include <iostream>
 
 #include "Core/GameDatabase.h"
+#include "Core/ProductionPlanner.h"
 
 
 int main()
@@ -14,6 +15,20 @@ int main()
     {
         std::cout << "Database load failed\n";
         return 1;
+    }
+
+
+    ProductionPlanner planner(database);
+    Item* target =
+        database.FindItemByName("Turbo Motor");
+
+
+    if (target)
+    {
+        planner.Plan(
+            target,
+            1
+        );
     }
 
 

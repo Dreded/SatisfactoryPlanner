@@ -16,6 +16,9 @@ public:
 
     bool Load(const std::string& filename);
 
+    Item* FindItemByName(const std::string& name);
+    Item* FindItem(const std::string& id);
+
     const std::vector<Recipe>& GetRecipes() const
     {
         return recipes;
@@ -39,6 +42,11 @@ public:
         return empty;
     }
 
+    const auto& GetRecipeLookup() const
+    {
+        return recipeByProduct;
+    }
+
 private:
 
     bool LoadItems(const nlohmann::json& data);
@@ -50,5 +58,6 @@ private:
     std::vector<Item> items;
 
     std::unordered_map<std::string, Item*> itemLookup;
+    std::unordered_map<std::string, Item*> itemNameLookup;
     std::unordered_map<Item*, std::vector<Recipe*>> recipeByProduct;
 };
