@@ -19,6 +19,8 @@ public:
     Item* FindItemByName(const std::string& name);
     Item* FindItem(const std::string& id);
 
+    Recipe* FindRecipeByName(const std::string& name);
+
     const std::vector<Recipe>& GetRecipes() const
     {
         return recipes;

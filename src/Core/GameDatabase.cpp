@@ -385,3 +385,14 @@ Item* GameDatabase::FindItem(const std::string& id)
     }
     return it->second;
 }
+
+Recipe* GameDatabase::FindRecipeByName(const std::string& name)
+{
+    for (auto& recipe : recipes)
+    {
+        if (recipe.name == name)
+            return &recipe;
+    }
+
+    return nullptr;
+}

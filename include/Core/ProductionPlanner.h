@@ -13,7 +13,7 @@ public:
     ProductionPlanner(GameDatabase& database);
 
     void Plan(Item* target, float amount);
-
+    void SetRecipe(Item* item, Recipe* recipe);
 
 private:
 
@@ -28,4 +28,5 @@ private:
 
 
     std::unordered_map<Item*, float> requiredItems;
+    std::unordered_map<Item*, Recipe*> selectedRecipes;
 };

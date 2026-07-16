@@ -42,6 +42,22 @@ void ProductionPlanner::Plan(Item* target, float amount)
     }
 }
 
+void ProductionPlanner::SetRecipe(Item* item, Recipe* recipe)
+{
+    if (!item)
+    {
+        std::cerr << "SetRecipe(): item is nullptr.\n";
+        return;
+    }
+
+    if (!recipe)
+    {
+        std::cerr << "SetRecipe(): recipe is nullptr.\n";
+        return;
+    }
+
+    selectedRecipes[item] = recipe;
+}
 
 
 void ProductionPlanner::Resolve(
@@ -63,8 +79,18 @@ void ProductionPlanner::Resolve(
     }
 
 
-    Recipe* recipe =
-        recipes->second.front();
+    Recipe* recipe = nullptr;
+
+    auto selected = selectedRecipes.find(item);
+
+    if (selected != selectedRecipes.end())
+    {
+        recipe = selected->second;
+    }
+    else
+    {
+        recipe = recipes->second.front();
+    }
 
 
     float multiplier =
