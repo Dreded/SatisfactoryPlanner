@@ -15,6 +15,7 @@ public:
 
     void Plan(Item* target, float amount);
     void SetRecipe(Item* item, Recipe* recipe);
+    void CollectMachines(const ProductionNode& node);
 
 private:
 
@@ -22,6 +23,12 @@ private:
         Item* item,
         float amount
     );
+
+    struct MachineRequirement
+    {
+        Recipe* recipe = nullptr;
+        float machines = 0;
+    };
 
     void PrintNode(const ProductionNode& node, int depth = 0);
 
@@ -33,4 +40,5 @@ private:
 
     std::unordered_map<Item*, float> baseResources;
     std::unordered_map<Item*, Recipe*> selectedRecipes;
+    std::unordered_map<Recipe*, float> machineRequirements;
 };

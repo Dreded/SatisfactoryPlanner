@@ -29,7 +29,7 @@ int main()
     }
 
 
-    planner.Plan(target, 5);
+    planner.Plan(target, 10);
 
     std::cout << "Done\n";
 

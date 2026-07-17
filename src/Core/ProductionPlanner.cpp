@@ -40,6 +40,22 @@ void ProductionPlanner::Plan(Item* target, float amount)
             << item.second
             << "\n";
     }
+
+    CollectMachines(tree);
+
+    std::cout << "\nMachines Required:\n";
+
+    for (auto& machine : machineRequirements)
+    {
+        std::cout
+            << "  "
+            << machine.first->machine
+            << ": "
+            << machine.first->name
+            << " x"
+            << machine.second
+            << "\n";
+    }
 }
 
 void ProductionPlanner::SetRecipe(Item* item, Recipe* recipe)
@@ -181,5 +197,19 @@ void ProductionPlanner::CollectBaseResources(
     for (const auto& child : node.children)
     {
         CollectBaseResources(child);
+    }
+}
+
+void ProductionPlanner::CollectMachines(const ProductionNode& node)
+{
+    if (node.recipe)
+    {
+        machineRequirements[node.recipe] +=
+            node.machinesRequired;
+    }
+
+    for (const auto& child : node.children)
+    {
+        CollectMachines(child);
     }
 }
