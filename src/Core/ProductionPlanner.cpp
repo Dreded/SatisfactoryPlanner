@@ -1,7 +1,8 @@
-#include "Core/ProductionPlanner.h"
-
 #include <iostream>
 #include <cmath>
+
+#include "Core/ProductionPlanner.h"
+#include "Core/FactoryPrinter.h"
 
 
 ProductionPlanner::ProductionPlanner(GameDatabase& database)
@@ -14,6 +15,8 @@ ProductionPlanner::ProductionPlanner(GameDatabase& database)
 
 void ProductionPlanner::Plan(Item* target, float amount)
 {
+    targetItem = target;
+
     auto tree = Resolve(
         target,
         amount
@@ -23,48 +26,26 @@ void ProductionPlanner::Plan(Item* target, float amount)
     baseResources.clear();
     machineRequirements.clear();
     machines.clear();
+    connections.clear();
 
 
     CollectBaseResources(tree);
     CollectMachines(tree);
     BuildMachineList();
+    BuildConnections();
+    ValidateConnections();
 
+    auto graph = GetFactoryGraph();
 
-    std::cout << "\nProduction Plan:\n";
-    PrintNode(tree);
+    FactoryPrinter::PrintFactoryGraph(graph, target);
 
+    //FactoryPrinter::PrintResources(graph);
+    //FactoryPrinter::PrintMachineRequirements(graph);
 
-    std::cout << "\nBase Resources:\n";
-
-    for (auto& item : baseResources)
-    {
-        std::cout
-            << "  "
-            << item.first->name
-            << " x"
-            << item.second
-            << "\n";
-    }
-
-
-    std::cout << "\nMachines Required:\n";
-
-    for (auto& machine : machineRequirements)
-    {
-        std::cout
-            << "  "
-            << machine.first->machine
-            << ": "
-            << machine.first->name
-            << " x"
-            << machine.second
-            << "\n";
-    }
-
-
-    PrintMachines();
-    PrintMachineDetails();
-    PrintGroupedMachines();
+    //FactoryPrinter::PrintMachines(graph);
+    //FactoryPrinter::PrintMachineDetails(graph);
+    //FactoryPrinter::PrintMachineGroups(graph);
+    //FactoryPrinter::PrintConnections(graph);
 }
 
 void ProductionPlanner::SetRecipe(Item* item, Recipe* recipe)
@@ -148,62 +129,6 @@ ProductionNode ProductionPlanner::Resolve(
 
 
     return node;
-}
-
-void ProductionPlanner::PrintNode(
-    const ProductionNode& node,
-    int depth
-)
-{
-    std::cout
-        << std::string(depth * 2, ' ')
-        << node.item->name
-        << " x"
-        << node.rate;
-
-
-    if (node.recipe)
-    {
-        std::cout
-            << " ["
-            << node.recipe->machine
-            << "]";
-
-        std::cout
-            << " "
-            << node.recipe->GetOutputPerMinute()
-            << "/min";
-    }
-
-
-    std::cout << "\n";
-
-
-    for (const auto& child : node.children)
-    {
-        PrintNode(child, depth + 1);
-    }
-}
-
-void ProductionPlanner::PrintMachines()
-{
-    std::cout << "\nMachine List:\n";
-
-    int count = 1;
-
-    for (const auto& machine : machines)
-    {
-        std::cout
-            << "#"
-            << machine.id
-            << " "
-            << machine.recipe->machine
-            << " - "
-            << machine.recipe->name
-            << " @ "
-            << machine.clockSpeed * 100
-            << "%\n";
-    }
 }
 
 void ProductionPlanner::CollectBaseResources(
@@ -298,9 +223,87 @@ void ProductionPlanner::BuildMachineList()
         }
     }
 }
-void ProductionPlanner::PrintMachineDetails()
+
+void ProductionPlanner::BuildConnections()
 {
-    std::cout << "\nMachine Details:\n";
+    struct InputDemand
+    {
+        ProductionMachine* machine;
+        Item* item;
+        float remaining;
+    };
+
+
+    std::vector<InputDemand> demands;
+
+
+    // Build a list of all required inputs
+    for (auto& machine : machines)
+    {
+        for (auto& input : machine.inputs)
+        {
+            InputDemand demand;
+
+            demand.machine = &machine;
+            demand.item = input.item;
+            demand.remaining = input.rate;
+
+            demands.push_back(demand);
+        }
+    }
+
+
+    // Match outputs to inputs
+    for (auto& producer : machines)
+    {
+        for (auto& output : producer.outputs)
+        {
+            float remainingOutput = output.rate;
+
+
+            for (auto& demand : demands)
+            {
+                if (remainingOutput <= 0)
+                    break;
+
+
+                if (demand.item != output.item)
+                    continue;
+
+
+                if (demand.remaining <= 0)
+                    continue;
+
+
+                float amount =
+                    std::min(
+                        remainingOutput,
+                        demand.remaining
+                    );
+
+
+                MachineConnection connection;
+
+                connection.from = &producer;
+                connection.to = demand.machine;
+                connection.item = output.item;
+                connection.rate = amount;
+
+
+                connections.push_back(connection);
+
+
+                remainingOutput -= amount;
+                demand.remaining -= amount;
+            }
+        }
+    }
+}
+
+void ProductionPlanner::ValidateConnections()
+{
+    std::cout << "\nConnection Validation:\n";
+
 
     for (auto& machine : machines)
     {
@@ -311,125 +314,135 @@ void ProductionPlanner::PrintMachineDetails()
             << machine.recipe->machine
             << " - "
             << machine.recipe->name
-            << " @ "
-            << machine.clockSpeed * 100
-            << "%\n";
+            << "\n";
 
 
-        std::cout << "  Inputs:\n";
-
-        if (machine.inputs.empty())
+        // Check outputs
+        for (auto& output : machine.outputs)
         {
-            std::cout << "    None\n";
-        }
-        else
-        {
-            for (auto& input : machine.inputs)
+            float connected = 0;
+
+
+            for (auto& connection : connections)
+            {
+                if (connection.from == &machine &&
+                    connection.item == output.item)
+                {
+                    connected += connection.rate;
+                }
+            }
+
+
+            float difference =
+                output.rate - connected;
+
+
+            std::cout
+                << "  Output "
+                << output.item->name
+                << ": "
+                << connected
+                << "/"
+                << output.rate;
+
+
+            if (std::abs(difference) < 0.01f)
+            {
+                std::cout << " OK";
+            }
+            else if (output.item == targetItem)
+            {
+                std::cout << " WARNING (No destination)";
+            }
+            else
             {
                 std::cout
-                    << "    "
-                    << input.item->name
-                    << " "
-                    << input.rate
-                    << "/min\n";
+                    << " ERROR ("
+                    << difference
+                    << " remaining)";
             }
+
+
+            std::cout << "\n";
         }
 
 
-        std::cout << "  Outputs:\n";
+        // Check inputs
+        for (auto& input : machine.inputs)
+        {
+            float connected = 0;
 
-        if (machine.outputs.empty())
-        {
-            std::cout << "    None\n";
-        }
-        else
-        {
-            for (auto& output : machine.outputs)
+
+            for (auto& connection : connections)
+            {
+                if (connection.to == &machine &&
+                    connection.item == input.item)
+                {
+                    connected += connection.rate;
+                }
+            }
+
+
+            float difference =
+                input.rate - connected;
+
+
+            std::cout
+                << "  Input "
+                << input.item->name
+                << ": "
+                << connected
+                << "/"
+                << input.rate;
+
+
+            bool isRawResource =
+                baseResources.find(input.item) != baseResources.end();
+
+
+            if (std::abs(difference) < 0.01f)
+            {
+                std::cout << " OK";
+            }
+            else if (isRawResource)
+            {
+                std::cout << " WARNING (Resource source required)";
+            }
+            else
             {
                 std::cout
-                    << "    "
-                    << output.item->name
-                    << " "
-                    << output.rate
-                    << "/min\n";
+                    << " ERROR ("
+                    << difference
+                    << " missing)";
             }
+
+
+            std::cout << "\n";
         }
-
-
-        std::cout << "\n";
     }
 }
-void ProductionPlanner::PrintGroupedMachines()
+
+FactoryGraph ProductionPlanner::GetFactoryGraph()
 {
-    struct MachineGroup
+    FactoryGraph graph;
+
+
+    for (auto& machine : machines)
     {
-        Recipe* recipe = nullptr;
-        float clockSpeed = 0;
-        std::vector<int> ids;
-    };
-
-
-    std::vector<MachineGroup> groups;
-
-
-    for (const auto& machine : machines)
-    {
-        bool found = false;
-
-        for (auto& group : groups)
-        {
-            if (group.recipe == machine.recipe &&
-                group.clockSpeed == machine.clockSpeed)
-            {
-                group.ids.push_back(machine.id);
-                found = true;
-                break;
-            }
-        }
-
-
-        if (!found)
-        {
-            MachineGroup group;
-
-            group.recipe = machine.recipe;
-            group.clockSpeed = machine.clockSpeed;
-            group.ids.push_back(machine.id);
-
-            groups.push_back(group);
-        }
+        graph.machines.push_back(&machine);
     }
 
 
-    std::cout << "\nGrouped Machines:\n";
-
-
-    for (const auto& group : groups)
+    for (auto& connection : connections)
     {
-        std::cout
-            << "  "
-            << group.ids.size()
-            << "x "
-            << group.recipe->machine
-            << " - "
-            << group.recipe->name
-            << " @ "
-            << group.clockSpeed * 100
-            << "%\n";
-
-
-        std::cout << "    IDs: ";
-
-        for (size_t i = 0; i < group.ids.size(); i++)
-        {
-            std::cout
-                << "#"
-                << group.ids[i];
-
-            if (i < group.ids.size() - 1)
-                std::cout << ", ";
-        }
-
-        std::cout << "\n";
+        graph.connections.push_back(&connection);
     }
+
+
+    graph.resources = baseResources;
+
+    graph.machineRequirements = machineRequirements;
+
+
+    return graph;
 }

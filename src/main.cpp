@@ -20,6 +20,8 @@ int main()
 
     ProductionPlanner planner(database);
 
+    // auto* target = database.FindItemByName("Versatile Framework");
+
     auto* target = database.FindItemByName("Reinforced Iron Plate");
 
     if (!target)

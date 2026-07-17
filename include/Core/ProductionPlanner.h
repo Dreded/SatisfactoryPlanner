@@ -7,6 +7,8 @@
 #include "Core/GameDatabase.h"
 #include "Models/ProductionNode.h"
 #include "Models/ProductionMachine.h"
+#include "Models/MachineConnection.h"
+#include "Models/FactoryGraph.h"
 
 class ProductionPlanner
 {
@@ -24,19 +26,16 @@ private:
         float amount
     );
 
-    void PrintNode(
-        const ProductionNode& node,
-        int depth = 0
-    );
+    FactoryGraph GetFactoryGraph();
 
     void CollectBaseResources( const ProductionNode& node);
     void CollectMachines( const ProductionNode& node);
     void BuildMachineList();
-    void PrintMachines();
-    void PrintMachineDetails();
-    void PrintGroupedMachines();
+    void BuildConnections();
+    void ValidateConnections();
 
     GameDatabase& database;
+    Item* targetItem = nullptr;
 
     std::unordered_map<Item*, float> baseResources;
     std::unordered_map<Recipe*, float> machineRequirements;
@@ -44,5 +43,5 @@ private:
     std::unordered_map<Item*, Recipe*> selectedRecipes;
 
     std::vector<ProductionMachine> machines;
-
+    std::vector<MachineConnection> connections;
 };

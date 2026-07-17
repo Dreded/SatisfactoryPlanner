@@ -12,7 +12,7 @@ add_executable(
 
     "src/main.cpp"
     "src/Core/GameDatabase.cpp"
- "src/Core/ProductionPlanner.cpp")
+ "src/Core/ProductionPlanner.cpp" "src/Core/FactoryPrinter.cpp")
 
 add_custom_command(
     TARGET SatisfactoryPlanner POST_BUILD
