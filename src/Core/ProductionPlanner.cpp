@@ -1,6 +1,7 @@
 #include "Core/ProductionPlanner.h"
 
 #include <iostream>
+#include <cmath>
 
 
 ProductionPlanner::ProductionPlanner(GameDatabase& database)
@@ -19,14 +20,18 @@ void ProductionPlanner::Plan(Item* target, float amount)
     );
 
 
-    std::cout << "\nProduction Plan:\n";
-
-    PrintNode(tree);
-
-
     baseResources.clear();
+    machineRequirements.clear();
+    machines.clear();
+
 
     CollectBaseResources(tree);
+    CollectMachines(tree);
+    BuildMachineList();
+
+
+    std::cout << "\nProduction Plan:\n";
+    PrintNode(tree);
 
 
     std::cout << "\nBase Resources:\n";
@@ -41,7 +46,6 @@ void ProductionPlanner::Plan(Item* target, float amount)
             << "\n";
     }
 
-    CollectMachines(tree);
 
     std::cout << "\nMachines Required:\n";
 
@@ -56,6 +60,11 @@ void ProductionPlanner::Plan(Item* target, float amount)
             << machine.second
             << "\n";
     }
+
+
+    PrintMachines();
+    PrintMachineDetails();
+    PrintGroupedMachines();
 }
 
 void ProductionPlanner::SetRecipe(Item* item, Recipe* recipe)
@@ -93,7 +102,6 @@ ProductionNode ProductionPlanner::Resolve(
 
     if (recipes == database.GetRecipeLookup().end())
     {
-        baseResources[item] += rate;
         return node;
     }
 
@@ -115,7 +123,6 @@ ProductionNode ProductionPlanner::Resolve(
 
     if (!recipe)
     {
-        baseResources[item] += rate;
         return node;
     }
 
@@ -126,11 +133,6 @@ ProductionNode ProductionPlanner::Resolve(
 
     node.machinesRequired =
         rate / node.machineRate;
-
-    float multiplier =
-        rate /
-        node.machineRate;
-
 
     for (auto& ingredient : recipe->ingredients)
     {
@@ -183,6 +185,27 @@ void ProductionPlanner::PrintNode(
     }
 }
 
+void ProductionPlanner::PrintMachines()
+{
+    std::cout << "\nMachine List:\n";
+
+    int count = 1;
+
+    for (const auto& machine : machines)
+    {
+        std::cout
+            << "#"
+            << machine.id
+            << " "
+            << machine.recipe->machine
+            << " - "
+            << machine.recipe->name
+            << " @ "
+            << machine.clockSpeed * 100
+            << "%\n";
+    }
+}
+
 void ProductionPlanner::CollectBaseResources(
     const ProductionNode& node
 )
@@ -211,5 +234,202 @@ void ProductionPlanner::CollectMachines(const ProductionNode& node)
     for (const auto& child : node.children)
     {
         CollectMachines(child);
+    }
+}
+
+void ProductionPlanner::BuildMachineList()
+{
+    int id = 1;
+
+    for (auto& requirement : machineRequirements)
+    {
+        Recipe* recipe = requirement.first;
+        float count = requirement.second;
+
+        int wholeMachines =
+            static_cast<int>(std::ceil(count));
+
+
+        for (int i = 0; i < wholeMachines; i++)
+        {
+            ProductionMachine machine;
+
+            machine.id = id++;
+
+            machine.recipe = recipe;
+
+            machine.clockSpeed =
+                count / wholeMachines;
+
+
+            // Calculate outputs
+            for (auto& product : recipe->products)
+            {
+                ItemRate output;
+
+                output.item = product.item;
+
+                output.rate =
+                    recipe->GetOutputPerMinute()
+                    * machine.clockSpeed;
+
+                machine.outputs.push_back(output);
+            }
+
+
+            // Calculate inputs
+            for (auto& ingredient : recipe->ingredients)
+            {
+                ItemRate input;
+
+                input.item = ingredient.item;
+
+                input.rate =
+                    ingredient.amount
+                    *
+                    recipe->GetCyclesPerMinute()
+                    *
+                    machine.clockSpeed;
+
+                machine.inputs.push_back(input);
+            }
+
+            machines.push_back(machine);
+        }
+    }
+}
+void ProductionPlanner::PrintMachineDetails()
+{
+    std::cout << "\nMachine Details:\n";
+
+    for (auto& machine : machines)
+    {
+        std::cout
+            << "#"
+            << machine.id
+            << " "
+            << machine.recipe->machine
+            << " - "
+            << machine.recipe->name
+            << " @ "
+            << machine.clockSpeed * 100
+            << "%\n";
+
+
+        std::cout << "  Inputs:\n";
+
+        if (machine.inputs.empty())
+        {
+            std::cout << "    None\n";
+        }
+        else
+        {
+            for (auto& input : machine.inputs)
+            {
+                std::cout
+                    << "    "
+                    << input.item->name
+                    << " "
+                    << input.rate
+                    << "/min\n";
+            }
+        }
+
+
+        std::cout << "  Outputs:\n";
+
+        if (machine.outputs.empty())
+        {
+            std::cout << "    None\n";
+        }
+        else
+        {
+            for (auto& output : machine.outputs)
+            {
+                std::cout
+                    << "    "
+                    << output.item->name
+                    << " "
+                    << output.rate
+                    << "/min\n";
+            }
+        }
+
+
+        std::cout << "\n";
+    }
+}
+void ProductionPlanner::PrintGroupedMachines()
+{
+    struct MachineGroup
+    {
+        Recipe* recipe = nullptr;
+        float clockSpeed = 0;
+        std::vector<int> ids;
+    };
+
+
+    std::vector<MachineGroup> groups;
+
+
+    for (const auto& machine : machines)
+    {
+        bool found = false;
+
+        for (auto& group : groups)
+        {
+            if (group.recipe == machine.recipe &&
+                group.clockSpeed == machine.clockSpeed)
+            {
+                group.ids.push_back(machine.id);
+                found = true;
+                break;
+            }
+        }
+
+
+        if (!found)
+        {
+            MachineGroup group;
+
+            group.recipe = machine.recipe;
+            group.clockSpeed = machine.clockSpeed;
+            group.ids.push_back(machine.id);
+
+            groups.push_back(group);
+        }
+    }
+
+
+    std::cout << "\nGrouped Machines:\n";
+
+
+    for (const auto& group : groups)
+    {
+        std::cout
+            << "  "
+            << group.ids.size()
+            << "x "
+            << group.recipe->machine
+            << " - "
+            << group.recipe->name
+            << " @ "
+            << group.clockSpeed * 100
+            << "%\n";
+
+
+        std::cout << "    IDs: ";
+
+        for (size_t i = 0; i < group.ids.size(); i++)
+        {
+            std::cout
+                << "#"
+                << group.ids[i];
+
+            if (i < group.ids.size() - 1)
+                std::cout << ", ";
+        }
+
+        std::cout << "\n";
     }
 }

@@ -18,8 +18,16 @@ std::string ExtractItemID(const std::string& input)
 
     std::string id = input.substr(pos + 1);
 
-    if (!id.empty() && id.back() == '\'')
+
+    // Remove Unreal path cleanup characters
+    while (!id.empty() &&
+        (id.back() == '\'' ||
+            id.back() == '"' ||
+            id.back() == ')'))
+    {
         id.pop_back();
+    }
+
 
     return id;
 }
@@ -46,6 +54,9 @@ std::string ExtractMachineName(const std::string& input)
 
     if (input.find("Refinery") != std::string::npos)
         return "Refinery";
+
+    if (input.find("Converter") != std::string::npos)
+        return "Converter";
 
     return "Unknown";
 }
@@ -165,9 +176,9 @@ bool GameDatabase::LoadItems(const json& data)
 
         std::string nativeClass = entry["NativeClass"];
 
-
-        if (nativeClass.find("FGItemDescriptor") == std::string::npos)
-            continue;
+if (nativeClass.find("FGItemDescriptor") == std::string::npos &&
+    nativeClass.find("FGResourceDescriptor") == std::string::npos)
+    continue;
 
 
         for (const auto& itemJson : entry["Classes"])
@@ -221,6 +232,11 @@ bool GameDatabase::LoadRecipes(const json& data)
 
             recipe.id = recipeJson.value("ClassName", "");
             recipe.name = recipeJson.value("mDisplayName", "");
+            if (!recipeJson.contains("mIngredients") ||
+                !recipeJson.contains("mProduct"))
+            {
+                continue;
+            }
             recipe.machine =
                 ExtractMachineName(
                     recipeJson.value("mProducedIn", "")
@@ -287,6 +303,11 @@ bool GameDatabase::LoadRecipes(const json& data)
                         recipe.products.push_back(item);
                     }
                 }
+            }
+            if (recipe.products.empty() ||
+                recipe.ingredients.empty())
+            {
+                continue;
             }
 
             recipes.push_back(recipe);
@@ -360,16 +381,16 @@ Recipe* GameDatabase::GetDefaultRecipe(Item* item)
     if (found == recipeByProduct.end())
         return nullptr;
 
-
     for (auto* recipe : found->second)
     {
-        if (recipe->name.rfind("Alternate:", 0) != 0)
-        {
-            return recipe;
-        }
+        if (recipe->machine == "Converter")
+            continue;
+
+        if (recipe->name.rfind("Alternate:", 0) == 0)
+            continue;
+
+        return recipe;
     }
 
-
-    // Only alternates exist, return first option
-    return found->second.front();
+    return nullptr;
 }
